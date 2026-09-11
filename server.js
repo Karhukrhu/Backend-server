@@ -6,35 +6,30 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Allow your frontend to talk to this backend (Replace with your actual frontend URL in production!)
+// Allow your frontend to talk to this backend
 app.use(cors({ origin: 'https://karhukarhu.place' })); 
 
-// Create a secure endpoint for your frontend to call
+// ==========================================
+// ENDPOINT 1: Get basic profile info
+// ==========================================
 app.get('/api/steam-profile', async (req, res) => {
     try {
-        // Get the Steam ID from the frontend request (e.g., ?steamid=76561198000000000)
         const steamId = req.query.steamid;
 
         if (!steamId) {
             return res.status(400).json({ error: 'Steam ID is required' });
         }
 
-        // The API key is safely read from the .env file on the server
         const apiKey = process.env.STEAM_API_KEY;
-        
-        // Example: Fetching player summaries from Steam
-        const url = `http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${apiKey}&steamids=${steamId}`;
+        const url = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${apiKey}&steamids=${steamId}`;
         
         const response = await axios.get(url);
-        
-        // Send ONLY the data your frontend actually needs back to the browser
         const playerData = response.data.response.players[0];
         
         res.json({
             personaname: playerData.personaname,
             avatar: playerData.avatarmedium,
             profileurl: playerData.profileurl,
-            // Add any other specific fields you need
         });
 
     } catch (error) {
@@ -43,6 +38,48 @@ app.get('/api/steam-profile', async (req, res) => {
     }
 });
 
+// ==========================================
+// ENDPOINT 2: Get last played game (NEW!)
+// ==========================================
+app.get('/api/last-played', async (req, res) => {
+    try {
+        const steamId = req.query.steamid;
+        if (!steamId) return res.status(400).json({ error: 'Steam ID required' });
+
+        const apiKey = process.env.STEAM_API_KEY;
+        
+        // Ask Steam for the 1 most recently played game
+        const url = `https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1/?key=${apiKey}&steamid=${steamId}&count=1`;
+        
+        const response = await axios.get(url);
+        const games = response.data.response.games;
+
+        // Check if there is a recently played game
+        if (games && games.length > 0) {
+            const game = games[0]; 
+            
+            // Format the icon URL correctly
+            const iconUrl = `https://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_icon_url}.jpg`;
+
+            res.json({
+                name: game.name,
+                icon: iconUrl,
+                playtime: game.playtime_2weeks 
+            });
+        } else {
+            // Fallback if no games played in the last 2 weeks
+            res.json({ name: "Nothing recently!", icon: null });
+        }
+
+    } catch (error) {
+        console.error('Error fetching last played game:', error.message);
+        res.status(500).json({ error: 'Failed to fetch game data' });
+    }
+});
+
+// ==========================================
+// START THE SERVER
+// ==========================================
 app.listen(PORT, () => {
     console.log(`Backend server running securely on http://localhost:${PORT}`);
 });

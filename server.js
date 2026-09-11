@@ -76,7 +76,48 @@ app.get('/api/last-played', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch game data' });
     }
 });
+// ==========================================
+// ENDPOINT 3: Get Last.fm Recent Track (NEW!)
+// ==========================================
+app.get('/api/lastfm-track', async (req, res) => {
+    try {
+        // Get the Last.fm username from the frontend request
+        const username = req.query.username; 
+        if (!username) return res.status(400).json({ error: 'Last.fm username required' });
 
+        const apiKey = process.env.LASTFM_API_KEY;
+        
+        // Last.fm API endpoint to get the 1 most recent track
+        const url = `http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
+        
+        const response = await axios.get(url);
+        const tracks = response.data.recenttracks.track;
+
+        if (tracks && tracks.length > 0) {
+            const track = tracks[0]; // Get the most recent one
+            
+            // Last.fm returns images in an array. We want the largest one (index 3).
+            const imageUrl = track.image[3]['#text'] || track.image[2]['#text'] || '';
+            
+            // Check if the track is currently playing right now
+            const isNowPlaying = track['@attr'] && track['@attr'].nowplaying === 'true';
+
+            res.json({
+                name: track.name,
+                artist: track.artist['#text'] || track.artist, // Handles different API response formats
+                album: track.album['#text'] || track.album,
+                image: imageUrl,
+                nowPlaying: isNowPlaying
+            });
+        } else {
+            res.json({ name: "No recent tracks", artist: "", album: "", image: "", nowPlaying: false });
+        }
+
+    } catch (error) {
+        console.error('Error fetching Last.fm data:', error.message);
+        res.status(500).json({ error: 'Failed to fetch Last.fm data' });
+    }
+});
 // ==========================================
 // START THE SERVER
 // ==========================================
